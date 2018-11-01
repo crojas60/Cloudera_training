@@ -1,0 +1,43 @@
+export HADOOP_CLASSPATH=$HADOOP_CLASSPATH:/usr/share/java/mysql-connector-java.jar
+
+export HADOOP_USER_NAME=hdfs
+sqoop import --connect jdbc:mysql://34.205.65.241:3306/ecommerce_cloudera --username bootcamp --password bootcamp --table product_transaction  
+--hive-import
+
+wget http://34.205.65.241/access.log
+hdfs dfs -mkdir '/Cloudera_training'
+hdfs dfs -put /tmp/access.log /Cloudera_training
+
+CREATE TABLE access_log (
+  ip STRING,
+  time_local STRING,
+  method STRING,
+  uri STRING,
+  protocol STRING,
+  status STRING,
+  bytes_sent STRING,
+  referer STRING,
+  useragent STRING
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
+WITH SERDEPROPERTIES  (
+"input.regex" = '^(\\S+) \\S+ \\S+ \\[([^\\[]+)\\] "(\\w+) (\\S+) (\\S+)" (\\d+) (\\d+) "([^"]+)" "([^"]+)".*',
+"output.format.string" = "%1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9 	$s"
+)
+STORED AS TEXTFILE
+LOCATION '/Cloudera_training/';
+
+
+
+CREATE TABLE visualizacion2 AS SELECT substring_index(uri,'=',-1) as producto, COUNT(substring_index(uri,'=',-1)) as veces 
+from access_log2 where uri like '%/item/id?skuID%' GROUP BY substring_index(uri,'=',-1);
+
+CREATE TABLE compras AS
+select product_id, SUM(product_cantity) compras from product_transaction group by product_id;
+
+CREATE TABLE conversion AS
+SELECT producto as sku,cast (compras/veces as STRING) as conversion from  visualizacion2,compras where product_id = producto;
+
+show create table conversion
+
+sqoop export --connect jdbc:mysql://34.205.65.241:3306/ecommerce_cloudera --driver com.mysql.jdbc.Driver --username bootcamp --password bootcamp --table conversion_8 --hcatalog-table conversion
